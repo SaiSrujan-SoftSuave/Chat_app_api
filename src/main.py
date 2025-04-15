@@ -1,7 +1,14 @@
 from fastapi import FastAPI
 
+from src.api.api_v1.handler.main_handler import main_router
+from src.core.errors import register_all_errors
+from src.core.middleware.logging import register_middleware
+
 app = FastAPI(debug=True)
 
+register_middleware(app)
+register_all_errors(app)
+app.include_router(main_router)
 
 @app.get("/")
 async def root():

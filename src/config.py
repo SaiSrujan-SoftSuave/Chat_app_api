@@ -1,4 +1,4 @@
-from pydantic_settings import BaseSettings,SettingsConfigDict
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Setting(BaseSettings):
@@ -12,16 +12,8 @@ class Setting(BaseSettings):
     INVITE_TOKEN_EXPIRE_TIME: int
     JWT_SECRET_KEY: str
     ALGORITHM: str
-    SMTP_SERVER: str
-    SMTP_PORT: int
-    EMAIL_ADDRESS: str
-    EMAIL_PASSWORD: str
-    AWS_ACCESS_KEY: str
-    AWS_SECRET_KEY: str
-    AWS_REGION: str
-    S3_BUCKET_NAME: str
-    S3_FOLDER_NAME: str
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file="../.env", extra="ignore",env_file_encoding="utf-8")
+
 
 
 Config = Setting()
