@@ -9,6 +9,7 @@ app = FastAPI(debug=True)
 register_middleware(app)
 register_all_errors(app)
 app.include_router(main_router)
+from fastapi import BackgroundTasks
 
 @app.get("/")
 async def root():
