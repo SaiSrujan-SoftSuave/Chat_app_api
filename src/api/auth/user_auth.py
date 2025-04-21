@@ -36,7 +36,7 @@ async def user_sign_up(user: UserCreate, db: AsyncSession = Depends(get_db)):
                 message={
                     "message": "User created successfully"
                 },
-                data={"user": user},
+                data={"user_id": user.id},
             )
     except ChatAppException as e:
         raise e
@@ -54,7 +54,7 @@ async def user_sign_in(user: UserLogin, db: AsyncSession = Depends(get_db)):
             },
             data={
                 "access_token": access_token,
-                "user": user
+                "user_id": user.id
             }
         )
     else:
