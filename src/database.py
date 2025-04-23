@@ -1,6 +1,6 @@
 from typing import Any, AsyncGenerator
 
-from aioredis import Redis
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlmodel import SQLModel
 
@@ -17,7 +17,7 @@ async_session_maker = async_sessionmaker(
 )
 
 
-redis_client: Redis = Redis(host="redis", port=6379, decode_responses=True)
+redis_client: Redis = Redis(host="localhost", port=6379, decode_responses=True)
 
 async def init_db() -> None:
     """initializing database"""
