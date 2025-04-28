@@ -1,7 +1,8 @@
 from typing import List
 import uuid
 
-from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect, WebSocketException
+from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
+from sqlalchemy.orm import selectinload
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -13,60 +14,92 @@ from src.websocket_manager.websocker_manger import manager
 
 router = APIRouter(tags=["Message Management"], prefix="/message")
 
+# Example JSON
+# {
+#     "type": "message",
+#     "content": "hello",
+#     "receiver_id": "b80746f2-c937-4087-b76b-03e010675a74"
+# }
 
 @router.websocket("/ws")
 async def websocket_endpoint(
-        websocket: WebSocket,
-        session: AsyncSession = Depends(get_db)
+    websocket: WebSocket,
+    session: AsyncSession = Depends(get_db),
 ):
+    # 1) authenticate
+    user = await get_current_user_ws(websocket, session)
+    # 2) register connection
+    await manager.connect(websocket, user.id)
+
     try:
-        # Get the current user based on the WebSocket request
-        user = await get_current_user_ws(websocket, session)
-        # Add user to the connection manager
-        await manager.connect(websocket, user.id)
-
-        try:
-            while True:
-                # Receive data as JSON
+        while True:
+            try:
                 data = await websocket.receive_json()
-                if "type" in data or "content" in data or "receiver_id" in data:
-                    message_type = data['type']
-                    match message_type:
-                        case "message":
-                            message = Message(
-                                content=data['content'],
-                                sender_id=user.id,
-                                receiver_id=data['receiver_id']
-                            )
-                            session.add(message)
-                            await session.commit()
-                            await session.refresh(message)
+            except WebSocketDisconnect:
+                # client closed the socket
+                break
 
-                            # Send the message to the receiver through WebSocket
-                            await manager.send_personal_message(
-                                message.content,
-                                data['receiver_id']
-                            )
-                        case "image":
-                            print("image asds")
-                            await websocket.send_text("image received")
-                        case "video":
-                            print("video asds")
-                            await websocket.send_text("video received")
-                        case default:
-                            await websocket.send_text("Please send valid type")
+            # 3) validate payload has all required fields
+            if not all(k in data for k in ("type", "content", "receiver_id")):
+                await websocket.send_json({
+                    "type": "error",
+                    "message": "Invalid payload – must include type, content, and receiver_id"
+                })
+                continue
 
-                else:
-                    # Handle case where no data is received or invalid data
-                    await websocket.send_text("Please send valid JSON data")
+            # 4) dispatch by message type
+            msg_type = data["type"]
+            if msg_type == "message":
+                receiver_uuid = uuid.UUID(data["receiver_id"])
 
-        except Exception as e:
-            # Handle errors during message receiving or processing
-            print(f"Error: {e}")
-            await websocket.send_text(f"Error while processing your message,we accept only json")
+                if user.id == receiver_uuid:
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": "You cannot send a message to yourself"
+                    })
+                    continue
 
-    except WebSocketDisconnect:
-        # Handle disconnection
+                # persist
+                msg = Message(
+                    content=data["content"],
+                    sender_id=user.id,
+                    receiver_id=receiver_uuid
+                )
+                session.add(msg)
+                await session.commit()
+                await session.refresh(msg)
+
+                # send
+                await manager.send_personal_message(
+                    msg.content,
+                    receiver_uuid,
+                    user.id
+                )
+
+            elif msg_type == "image":
+                # handle image...
+                await websocket.send_json({"type": "ack", "message": "image received"})
+
+            elif msg_type == "video":
+                # handle video...
+                await websocket.send_json({"type": "ack", "message": "video received"})
+
+            else:
+                await websocket.send_json({
+                    "type": "error",
+                    "message": f"Unknown message type: {msg_type}"
+                })
+
+    except Exception as e:
+        # unexpected server error
+        await websocket.send_json({
+            "type": "error",
+            "message": "Server error processing your message"
+        })
+        print(f"[ws error] {e!r}")
+
+    finally:
+        # cleanup on disconnect
         await manager.disconnect(user.id)
         print(f"User {user.id} disconnected.")
 
@@ -74,20 +107,29 @@ async def websocket_endpoint(
 @router.websocket("/hello")
 async def hello(websocket: WebSocket):
     await websocket.accept()
-    while True:
-        data = await websocket.receive_text()
-        await websocket.send_text(f"Message text was: {data}")
+    try:
+        while True:
+            text = await websocket.receive_text()
+            await websocket.send_text(f"Message text was: {text}")
+    except WebSocketDisconnect:
+        print("Hello socket disconnected.")
 
 
-@router.get("/messages/{receiver_id}", response_model=List[MessageRead])
+@router.get(
+    "/messages/{receiver_id}",
+    response_model=List[MessageRead],
+)
 async def get_past_messages(
-        receiver_id: uuid.UUID,
-        current_user: User = Depends(get_current_user),
-        session: AsyncSession = Depends(get_db),
-) -> List[Message]:
-    # A plain SQLModel select (no .options)
+    receiver_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> List[MessageRead]:
     stmt = (
         select(Message)
+        .options(
+            selectinload(Message.sender),
+            selectinload(Message.receiver),
+        )
         .where(
             ((Message.sender_id == current_user.id) & (Message.receiver_id == receiver_id)) |
             ((Message.sender_id == receiver_id) & (Message.receiver_id == current_user.id))
@@ -95,9 +137,5 @@ async def get_past_messages(
         .order_by(Message.timestamp)
     )
 
-    # this `exec()` call is happy with a bare select(...)
-    result = await session.exec(stmt)
-    messages = result.all()  # → Sequence[Message]
-
-    # if you still want a list for your annotation:
-    return list(messages)
+    result = await session.execute(stmt)
+    return result.scalars().all()
