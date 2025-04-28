@@ -101,7 +101,7 @@ def register_all_errors(app: FastAPI):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             initial_detail={
                 "message": f"invalid credentials, please check the details",
-                "error_code": "user_not_found",
+                "error_code": "invalid_credentials",
             },
         )
     )
