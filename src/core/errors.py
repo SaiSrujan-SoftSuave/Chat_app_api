@@ -37,6 +37,11 @@ class InvalidCredentials(ChatAppException):
     """
     Provided incorrect Credentials
     """
+class TokenSignatureExpired(ChatAppException):
+    """
+    Signature has expired of token.
+    """
+
 def create_exception_handler(
         status_code: int, initial_detail: Any
 ) -> Callable[[Request, Exception], JSONResponse]:
@@ -103,5 +108,15 @@ def register_all_errors(app: FastAPI):
                 "message": f"invalid credentials, please check the details",
                 "error_code": "invalid_credentials",
             },
+        )
+    )
+    app.add_exception_handler(
+        TokenSignatureExpired,
+        create_exception_handler(
+            status_code=status.HTTP_403_FORBIDDEN,
+            initial_detail={
+                "message": f"Signature has expired., please sign in again",
+                "error_code": "expired_credentials",
+            }
         )
     )
