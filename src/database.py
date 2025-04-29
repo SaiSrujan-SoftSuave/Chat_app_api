@@ -1,5 +1,6 @@
 from typing import Any, AsyncGenerator
 
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlmodel import SQLModel
 
@@ -16,6 +17,8 @@ async_session_maker = async_sessionmaker(
 )
 
 
+redis_client: Redis = Redis(host="localhost", port=6379, decode_responses=True)
+
 async def init_db() -> None:
     """initializing database"""
     async with async_engine.begin() as conn:
@@ -29,3 +32,7 @@ async def get_db() -> AsyncGenerator[AsyncSession | Any, Any]:
             yield session
         finally:
             await session.close()
+
+async def get_redis() -> Redis:
+    """getting redis client"""
+    return redis_client
