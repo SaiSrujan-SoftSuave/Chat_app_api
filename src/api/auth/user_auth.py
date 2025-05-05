@@ -1,6 +1,5 @@
-from http.client import HTTPException
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends,HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette import status
 from starlette.responses import JSONResponse
@@ -14,7 +13,7 @@ from src.services.user_service import create_new_user, authenticate_user, create
 
 auth_router = APIRouter(
     prefix="/auth",
-    tags=["user auth"]
+    tags=["User Authentication"]
 )
 
 
