@@ -1,7 +1,7 @@
 from fastapi import HTTPException,Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError
-from jwt import ExpiredSignatureError
+from jose.exceptions import ExpiredSignatureError
 from starlette import status
 
 from src.core.security import get_id_from_token
