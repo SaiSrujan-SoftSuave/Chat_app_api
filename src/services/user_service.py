@@ -1,4 +1,6 @@
 import uuid
+from datetime import datetime
+
 from asyncpg import UniqueViolationError
 from fastapi import Depends, HTTPException, WebSocketException,WebSocket
 from fastapi.security import HTTPAuthorizationCredentials
@@ -13,6 +15,7 @@ from src.core.errors import UserAlreadyExists, DataBaseException, UserNotFound, 
 from src.core.middleware.logging import logger
 from src.core.security import get_hashed_password, verify_password, create_access_token, get_id_from_token
 from src.database import get_db, get_redis
+from src.model import Message
 from src.model.request_models.request_models import UserCreate, UserLogin
 from src.model.user import User
 import json
@@ -165,3 +168,56 @@ def serialize_user(user: User) -> dict:
     #
     #         print("TAG --- ", users_data)
     #         return users_data
+
+
+async def make_user_online(db: AsyncSession, user_id: uuid.UUID):
+    """
+    Mark a user as online in the database.
+
+    :param db: AsyncSession instance
+    :param user_id: UUID of the user
+    """
+    user = await db.get(User, user_id)
+    if not user:
+        raise UserNotFound()
+    try:
+        user.is_online = True
+        await db.commit()
+        await db.refresh(user)
+    except SQLAlchemyError as e:
+        raise DataBaseException(detail=str(e))
+
+async def make_user_offline(db: AsyncSession, user_id: uuid.UUID):
+    """
+    Mark a user as offline in the database.
+
+    :param db: AsyncSession instance
+    :param user_id: UUID of the user
+    """
+    user = await db.get(User, user_id)
+    if not user:
+        raise UserNotFound()
+    try:
+        user.is_online = False
+        await db.commit()
+        await db.refresh(user)
+    except SQLAlchemyError as e:
+        raise DataBaseException(detail=str(e))
+
+async def set_message_seen_timestamp(db: AsyncSession, message_id: uuid.UUID):
+    """
+    Set the seen timestamp for a message.
+
+    :param db: AsyncSession instance
+    :param message_id: UUID of the message
+    """
+    message = await db.get(Message, message_id)
+    if not message:
+        raise UserNotFound()
+    try:
+        message.seen_timestamp = datetime.now()
+        await db.commit()
+        await db.refresh(message)
+        return message
+    except SQLAlchemyError as e:
+        raise DataBaseException(detail=str(e))
